@@ -137,74 +137,56 @@ class ProfileManager(private val context: Context) : IProfileManager,
     }
 
     suspend fun updateFlow(old: Imported) {
+        val realUrl = old.source.substringBefore("#")
+        val params = if (old.source.contains("#")) {
+            val fragment = old.source.substringAfter("#")
+            fragment.split("&").filter { it.isNotBlank() }.associate {
+                val parts = it.split("=")
+                parts[0] to (parts.getOrNull(1)?.let { v -> java.net.URLDecoder.decode(v, "UTF-8") } ?: "")
+            }
+        } else emptyMap()
+
+        val autoHwid = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "00000000"
+
         val client = OkHttpClient()
         try {
-            val versionName = context.packageManager.getPackageInfo(context.packageName, 0).versionName
-            val request = Request.Builder()
-                .url(old.source)
-                .header("User-Agent", "ClashMetaForAndroid/$versionName")
-                .build()
+            val reqBuilder = Request.Builder().url(realUrl)
 
-            client.newCall(request).execute().use { response ->
+            // Безопасная сборка заголовков: Приоритет параметрам из ссылки, иначе - дефолты
+            reqBuilder.header("User-Agent", params["UA"] ?: "Happ/3.16.1/Android/1743595")
+            reqBuilder.header("x-device-model", params["Model"] ?: android.os.Build.MODEL)
+            reqBuilder.header("x-hwid", params["HWID"] ?: autoHwid)
+            reqBuilder.header("x-device-os", params["OS"] ?: "Android")
+            reqBuilder.header("x-ver-os", params["OSVer"] ?: android.os.Build.VERSION.RELEASE)
+            reqBuilder.header("x-app-version", params["AppVer"] ?: "3.16.1")
+            reqBuilder.header("accept-encoding", params["Encoding"] ?: "gzip")
+            reqBuilder.header("x-device-locale", params["Locale"] ?: java.util.Locale.getDefault().language)
+            reqBuilder.header("accept-language", params["Lang"] ?: "ru-RU,en;q=0.9")
+
+            client.newCall(reqBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful || response.headers["subscription-userinfo"] == null) return
 
-                var upload: Long = 0
-                var download: Long = 0
-                var total: Long = 0
-                var expire: Long = 0
-
+                var upload: Long = 0; var download: Long = 0; var total: Long = 0; var expire: Long = 0
                 val userinfo = response.headers["subscription-userinfo"]
-                if (response.isSuccessful && userinfo != null) {
-
-                    val flags = userinfo.split(";")
-                    for (flag in flags) {
-                        val info = flag.split("=")
+                userinfo?.split(";")?.forEach { flag ->
+                    val info = flag.split("=")
+                    if (info.size >= 2) {
+                        val key = info[0].trim()
+                        val value = info[1].trim()
                         when {
-                            info[0].contains("upload") && info[1].isNotEmpty() -> upload =
-                                BigDecimal(info[1].split('.').first()).longValueExact()
-
-                            info[0].contains("download") && info[1].isNotEmpty() -> download =
-                                BigDecimal(info[1].split('.').first()).longValueExact()
-
-                            info[0].contains("total") && info[1].isNotEmpty() ->  total =
-                                BigDecimal(info[1].split('.').first()).longValueExact()
-
-                            info[0].contains("expire") && info[1].isNotEmpty() -> {
-                                if (info[1].isNotEmpty()) {
-                                    expire = (info[1].toDouble()*1000).toLong()
-                                }
-                            }
+                            key.contains("upload") -> upload = BigDecimal(value.split('.').first()).longValueExact()
+                            key.contains("download") -> download = BigDecimal(value.split('.').first()).longValueExact()
+                            key.contains("total") -> total = BigDecimal(value.split('.').first()).longValueExact()
+                            key.contains("expire") -> expire = (value.toDouble() * 1000).toLong()
                         }
                     }
                 }
-
-                val new = Imported(
-                    old.uuid,
-                    old.name,
-                    old.type,
-                    old.source,
-                    old.interval,
-                    upload,
-                    download,
-                    total,
-                    expire,
-                    old?.createdAt ?: System.currentTimeMillis()
-                )
-
-                if (old != null) {
-                    ImportedDao().update(new)
-                } else {
-                    ImportedDao().insert(new)
-                }
-
+                val new = Imported(old.uuid, old.name, old.type, old.source, old.interval, upload, download, total, expire, old.createdAt)
+                ImportedDao().update(new)
                 PendingDao().remove(new.uuid)
                 context.sendProfileChanged(new.uuid)
-                // println(response.body!!.string())
             }
-
-        } catch (e: Exception) {
-            System.out.println(e)
-        }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     override suspend fun commit(uuid: UUID, callback: IFetchObserver?) {

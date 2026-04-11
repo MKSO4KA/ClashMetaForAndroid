@@ -75,6 +75,7 @@
     <string name="unavailable">Недоступен</string>
     <string name="empty_name">Пустое название</string>
     <string name="invalid_url">Неверный URL</string>
+
     <string name="loading">Загрузка</string>
 
     <string name="format_fetching_configuration">Загрузка настроек из \'%s\'</string>
@@ -317,4 +318,36 @@
     <string name="override_destination">Override Destination</string>
     <string name="import_from_qr_no_permission">Доступ к камере ограничен. Разрешите его в настройках.</string>
     <string name="import_from_qr_exception">Произошла не обрабатываемая системная ошибка.</string>
+    <string name="user_agent">Мимикрия</string>
+    <string name="device_model">Модель устройства</string>
+    <string name="default_user_agent">По умолчанию (ClashMeta)</string>
+    <string name="default_device_model">По умолчанию</string>
+    <string name="device_preset">Профиль устройства</string>
+    <string name="preset_v2raytun">v2rayTun (Android)</string>
+    <string name="preset_happ_android">Happ (Android)</string>
+    <string name="preset_happ_pc">Happ (Windows ПК)</string>
+    <string name="preset_custom">Свой (ручной ввод)</string>
+    <string name="extra_headers">Доп. заголовки (через &amp;)</string>
+    <string name="ping_interval">Интервал авто-пинга (сек)</string>
+    <string name="ping_tolerance">Порог переключения (мс)</string>
+    <string name="ping_url">URL для проверки (Пинг)</string>
+    <string name="capture_radar_title">Захват отпечатка</string>
+    <string name="capture_radar_message">Локальный сервер запущен:\n&lt;b>%1$s&lt;/b>\n\n1. Скопируйте этот адрес.\n2. Вставьте его в целевое приложение (например, v2rayNG) вместо ссылки на подписку.\n3. Запустите обновление в целевом приложении.\n\nОжидание входящих пакетов… (60 сек)</string>
+    <string name="capture_success">Отпечаток успешно сохранен</string>
+    <string name="capture_timeout">Тайм-аут: пакеты не получены</string>
+    <string name="capture_error">Ошибка запуска сервера: %s</string>
+    <string name="action_copy_url">Скопировать адрес</string>
+    <string name="action_cancel">Прервать</string>
+    <string name="toast_copied">Адрес скопирован в буфер обмена</string>
+    <string name="extra_label"><![CDATA[Доп. заголовки (ключ=значение&amp;...)]]></string>
+    <string name="capture_desc">Перехват заголовков из других приложений</string>
+    <string name="advanced_settings">Расширенные настройки</string>
+    <string name="header_hwid">HWID (Идентификатор)</string>
+    <string name="header_os">ОС устройства</string>
+    <string name="header_os_ver">Версия ОС</string>
+    <string name="header_app_ver">Версия приложения</string>
+    <string name="header_encoding">Сжатие (Encoding)</string>
+    <string name="header_locale">Регион (Locale)</string>
+    <string name="header_lang">Язык (Language)</string>
+    <string name="advanced_settings_desc">Ручное управление заголовками и маскировкой</string>
 </resources>

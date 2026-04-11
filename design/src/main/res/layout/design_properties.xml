@@ -11,6 +11,10 @@
         <variable
             name="processing"
             type="boolean" />
+			
+		<variable
+            name="advanced"
+            type="boolean" />
 
         <import type="com.github.kr328.clash.service.model.Profile.Type" />
         <import type="android.view.View" />
@@ -74,9 +78,133 @@
                     app:enabled="@{profile.type != Type.File}"
                     app:icon="@drawable/ic_outline_inbox"
                     app:placeholder="@string/accept_http_content"
-                    app:text="@{profile.source}"
+                    app:text="@{self.getDisplayUrl(profile.source)}"
                     app:title="@string/url" />
+					
+					<!-- КНОПКА ВЫБОРА ПРЕСЕТА -->
+                <com.github.kr328.clash.design.view.ActionLabel
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+                    android:onClick="@{() -> self.selectDevicePreset()}"
+                    app:enabled="@{profile.type != Type.File}"
+                    app:icon="@drawable/ic_baseline_swap_vertical_circle"
+                    app:subtext="@{self.getCurrentPresetName(profile.source)}"
+                    app:text="@string/device_preset" />
+					
+				<!-- КНОПКА ЗАХВАТА (РАДАР) -->
+                <com.github.kr328.clash.design.view.ActionLabel
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+                    android:onClick="@{() -> self.startCapture()}"
+                    app:enabled="@{profile.type != Type.File}"
+                    app:icon="@drawable/ic_baseline_flash_on"
+                    app:subtext="@string/capture_desc"
+                    app:text="@string/capture_radar_title" />
 
+                <!-- КНОПКА-ПЕРЕКЛЮЧАТЕЛЬ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:onClick="@{() -> self.toggleAdvanced()}"
+        android:orientation="horizontal"
+        android:paddingVertical="@dimen/item_padding_vertical">
+
+        <ImageView
+            android:layout_width="@dimen/tips_icon_size"
+            android:layout_height="@dimen/tips_icon_size"
+            android:layout_marginHorizontal="@dimen/tips_icon_margin"
+            android:src="@drawable/ic_baseline_settings"
+            app:tint="?attr/colorOnSurface" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/advanced_settings"
+                android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/advanced_settings_desc"
+                android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
+        </LinearLayout>
+
+        <!-- САМ ТУМБЛЕР -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="@dimen/item_tailing_margin"
+            android:checked="@{advanced}"
+            android:clickable="false"
+            android:focusable="false" />
+    </LinearLayout>
+	
+    <!-- СПИСОК ИЗ 9 ПОЛЕЙ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="@{advanced ? View.VISIBLE : View.GONE}">
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`UA`, @string/user_agent)}"
+            app:icon="@drawable/ic_outline_info" app:text="@{self.getParam(profile.source, `UA`)}" app:title="@string/user_agent" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`Model`, @string/device_model)}"
+            app:icon="@drawable/ic_baseline_adb" app:text="@{self.getParam(profile.source, `Model`)}" app:title="@string/device_model" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`HWID`, @string/header_hwid)}"
+            app:icon="@drawable/ic_baseline_edit" app:text="@{self.getParam(profile.source, `HWID`)}" app:title="@string/header_hwid" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`OS`, @string/header_os)}"
+            app:icon="@drawable/ic_baseline_apps" app:text="@{self.getParam(profile.source, `OS`)}" app:title="@string/header_os" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`OSVer`, @string/header_os_ver)}"
+            app:icon="@drawable/ic_baseline_assignment" app:text="@{self.getParam(profile.source, `OSVer`)}" app:title="@string/header_os_ver" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`AppVer`, @string/header_app_ver)}"
+            app:icon="@drawable/ic_baseline_update" app:text="@{self.getParam(profile.source, `AppVer`)}" app:title="@string/header_app_ver" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`Encoding`, @string/header_encoding)}"
+            app:icon="@drawable/ic_baseline_sync" app:text="@{self.getParam(profile.source, `Encoding`)}" app:title="@string/header_encoding" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`Locale`, @string/header_locale)}"
+            app:icon="@drawable/ic_baseline_domain" app:text="@{self.getParam(profile.source, `Locale`)}" app:title="@string/header_locale" />
+
+        <com.github.kr328.clash.design.view.ActionTextField
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:onClick="@{() -> self.inputHeader(`Lang`, @string/header_lang)}"
+            app:icon="@drawable/ic_baseline_view_list" app:text="@{self.getParam(profile.source, `Lang`)}" app:title="@string/header_lang" />
+    </LinearLayout>
+					
                 <com.github.kr328.clash.design.view.ActionTextField
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -87,6 +215,39 @@
                     app:placeholder="@string/at_least_15_minutes"
                     app:text="@{profile.interval == 0 ? @string/disabled : @string/format_minutes(profile.interval / 1000 / 60)}"
                     app:title="@string/auto_update" />
+					
+				<com.github.kr328.clash.design.view.ActionTextField
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+                    android:onClick="@{() -> self.inputPingInterval()}"
+                    app:enabled="@{profile.type != Type.File}"
+                    app:icon="@drawable/ic_outline_update"
+                    app:placeholder="300"
+                    app:text="@{self.getPingInterval(profile.source)}"
+                    app:title="@string/ping_interval" />
+
+                <com.github.kr328.clash.design.view.ActionTextField
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+                    android:onClick="@{() -> self.inputTolerance()}"
+                    app:enabled="@{profile.type != Type.File}"
+                    app:icon="@drawable/ic_baseline_swap_vertical_circle"
+                    app:placeholder="150"
+                    app:text="@{self.getTolerance(profile.source)}"
+                    app:title="@string/ping_tolerance" />
+
+                <com.github.kr328.clash.design.view.ActionTextField
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/properties_element_margin_vertical"
+                    android:onClick="@{() -> self.inputPingUrl()}"
+                    app:enabled="@{profile.type != Type.File}"
+                    app:icon="@drawable/ic_baseline_dns"
+                    app:placeholder="http://cp.cloudflare.com/generate_204"
+                    app:text="@{self.getPingUrl(profile.source)}"
+                    app:title="@string/ping_url" />
 
                 <com.github.kr328.clash.design.view.ActionLabel
                     android:layout_width="match_parent"

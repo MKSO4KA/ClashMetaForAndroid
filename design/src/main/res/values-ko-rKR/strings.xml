@@ -62,6 +62,7 @@
     <string name="unavailable">이용 불가</string>
     <string name="empty_name">빈칸</string>
     <string name="invalid_url">유효하지 않은 URL</string>
+
     <string name="loading">로딩중</string>
     <string name="format_fetching_configuration">현재 %s 에서 구성 파일을 가져오는 중입니다.</string>
     <string name="format_fetching_provider">현재 외부 리소스 %s 을 가져오는 중입니다.</string>
@@ -253,4 +254,8 @@
     <string name="override_destination">Override Destination</string>
     <string name="import_from_qr_no_permission">카메라 접근이 제한되었습니다. 설정에서 허용해 주세요.</string>
     <string name="import_from_qr_exception">처리되지 않은 시스템 예외가 발생했습니다.</string>
+    <string name="user_agent">User Agent</string>
+    <string name="device_model">Device Model</string>
+    <string name="default_user_agent">Default (ClashMeta)</string>
+    <string name="default_device_model">Default</string>
 </resources>

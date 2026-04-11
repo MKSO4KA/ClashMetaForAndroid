@@ -138,6 +138,7 @@
     <string name="invalid_file_name">Tên tệp không hợp lệ</string>
     <string name="invalid_log_file">Tệp nhật ký không hợp lệ</string>
     <string name="invalid_url">Liên kết URL không hợp lệ</string>
+
     <string name="ipcidr_fallback">Dự phòng IPCIDR</string>
     <string name="ipv6">IPv6</string>
     <string name="key">Khoá</string>
@@ -239,4 +240,8 @@
     <string name="import_from_qr">Nhập từ Mã QR</string>
     <string name="import_from_qr_no_permission">Quyền truy cập camera bị hạn chế. Vui lòng bật trong Cài đặt.</string>
     <string name="import_from_qr_exception">Đã xảy ra ngoại lệ hệ thống không xử lý được.</string>
+    <string name="user_agent">User Agent</string>
+    <string name="device_model">Device Model</string>
+    <string name="default_user_agent">Default (ClashMeta)</string>
+    <string name="default_device_model">Default</string>
 </resources>

@@ -253,4 +253,8 @@
     <string name="override_destination">Override Destination</string>
     <string name="import_from_qr_no_permission">カメラのアクセスが制限されています。設定から有効にしてください。</string>
     <string name="import_from_qr_exception">システムで予期しない例外が発生しました。</string>
+    <string name="user_agent">User Agent</string>
+    <string name="device_model">Device Model</string>
+    <string name="default_user_agent">Default (ClashMeta)</string>
+    <string name="default_device_model">Default</string>
 </resources>

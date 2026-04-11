@@ -2,4 +2,7 @@
 <resources>
     <string name="receive_clash_broadcasts">Receive Clash Broadcasts</string>
     <string name="receive_broadcasts_of_clash">Receive broadcasts of clash services</string>
+    <string name="preset_v2raytun">v2rayTun (Android)</string>
+    <string name="preset_happ_android">Happ (Android)</string>
+    <string name="preset_happ_pc">Happ (Windows PC)</string>
 </resources>

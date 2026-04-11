@@ -269,4 +269,8 @@
     <string name="shortcut_start_long">启动 Clash 服务</string>
     <string name="shortcut_stop_short">停止 Clash</string>
     <string name="shortcut_stop_long">停止 Clash 服务</string>
+    <string name="user_agent">User Agent</string>
+    <string name="device_model">Device Model</string>
+    <string name="default_user_agent">Default (ClashMeta)</string>
+    <string name="default_device_model">Default</string>
 </resources>
