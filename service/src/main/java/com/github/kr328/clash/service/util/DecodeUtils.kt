@@ -1,14 +1,16 @@
 package com.github.kr328.clash.service.util
 
 import android.util.Base64
-import java.net.URLDecoder
-import java.util.Locale
 import com.github.kr328.clash.common.log.Log
+import java.net.URLDecoder
 
 object DecodeUtils {
 
-    // Включатель логов (true = пишет всё, false = молчит)
     const val ENABLE_DEBUG_LOGS = false
+
+    // ОПТИМИЗАЦИЯ: Компилируем регулярные выражения один раз при старте приложения (O(1) вместо O(N))
+    private val TRASH_REGEX = "(?i)(тех.*работ|обслуживан|maintenance|dead|error|timeout|ост.*0|expire.*0|out of date|истек|expired|limit)".toRegex()
+    private val RURB_REGEX = "(?i)(ru|russia|росси|rb|belarus|беларус|\\bby\\b|\uD83C\uDDF7\uD83C\uDDFA|\uD83C\uDDE7\uD83C\uDDFE)".toRegex()
 
     fun dLog(message: String) {
         if (ENABLE_DEBUG_LOGS) Log.d("[MegaKMS] $message")
@@ -18,14 +20,14 @@ object DecodeUtils {
         if (ENABLE_DEBUG_LOGS) Log.e("[MegaKMS] ERROR: $message")
     }
 
-    // НОВЫЙ МЕТОД: Инспекция байтов
     fun inspectBytes(input: String) {
         try {
             val bytes = input.toByteArray(Charsets.UTF_8)
-            val hex = bytes.take(20).joinToString(" ") { "%02X".format(it) }
-            dLog("HEX DUMP (First 20 bytes): $hex")
+            if (ENABLE_DEBUG_LOGS) {
+                val hex = bytes.take(20).joinToString(" ") { "%02X".format(it) }
+                dLog("HEX DUMP (First 20 bytes): $hex")
+            }
 
-            // Проверка на GZIP (заголовок GZIP всегда начинается с 1F 8B)
             if (bytes.size >= 2 && bytes[0].toInt() == 0x1F && (bytes[1].toInt() and 0xFF) == 0x8B) {
                 eLog("DETECTED GZIP! The input data is compressed. You need to decompress it before parsing.")
             }
@@ -35,17 +37,14 @@ object DecodeUtils {
     }
 
     fun tryDecodeBase64(input: String): String {
-        // Перед декодированием вычистим ВООБЩЕ ВСЁ, что не является символом Base64
         val allowedBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=-_".toSet()
         val clean = input.filter { it in allowedBase64 }
 
         return try {
-            val bytes = Base64.decode(clean, Base64.DEFAULT)
-            String(bytes, Charsets.UTF_8).trim()
+            String(Base64.decode(clean, Base64.DEFAULT), Charsets.UTF_8).trim()
         } catch (e: Exception) {
             try {
-                val bytes = Base64.decode(clean, Base64.URL_SAFE)
-                String(bytes, Charsets.UTF_8).trim()
+                String(Base64.decode(clean, Base64.URL_SAFE), Charsets.UTF_8).trim()
             } catch (e2: Exception) {
                 ""
             }
@@ -76,17 +75,17 @@ object DecodeUtils {
         return map
     }
 
-    // Заменяем старый isTrash на это:
     fun isTrash(name: String): Boolean {
+        if (name.isBlank()) return true
         val nLower = name.lowercase(java.util.Locale.getDefault())
-        // Умная регулярка: ищет тех.работы, мертвые ноды, истекший срок, нулевой баланс
-        val regex = "(?i)(тех.*работ|обслуживан|maintenance|dead|error|timeout|ост.*0|expire.*0|out of date|истек|expired|limit)".toRegex()
-        return regex.containsMatchIn(nLower) || nLower.contains("direct") || nLower.contains("reject")
+        // Используем закэшированную регулярку
+        return TRASH_REGEX.containsMatchIn(nLower) || nLower.contains("direct") || nLower.contains("reject")
     }
 
     fun isRuRb(name: String): Boolean {
+        if (name.isBlank()) return false
         val nLower = name.lowercase(java.util.Locale.getDefault())
-        // Определяем СНГ сегмент для маршрутизации
-        return "(?i)(ru|russia|росси|rb|belarus|беларус|\\bby\\b|\uD83C\uDDF7\uD83C\uDDFA|\uD83C\uDDE7\uD83C\uDDFE)".toRegex().containsMatchIn(nLower)
+        // Используем закэшированную регулярку
+        return RURB_REGEX.containsMatchIn(nLower)
     }
 }

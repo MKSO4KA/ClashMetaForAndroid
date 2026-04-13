@@ -262,13 +262,13 @@ object ProfileProcessor {
             val rawFile = context.processingDir.resolve("raw_config.txt")
             rawFile.writeText(rawBody)
 
-            val finalYaml = com.github.kr328.clash.service.util.SubConverter.convert(
-                rawInput = rawBody,
-                params = params
-            )
-
             val configFile = context.processingDir.resolve("config.yaml")
-            configFile.writeText(finalYaml)
+            // Вызываем стриминговую запись прямо в файл
+            com.github.kr328.clash.service.util.SubConverter.convertToFile(
+                rawInput = rawBody,
+                params = params,
+                outputFile = configFile
+            )
             Log.d("[KMS] === ЗАГРУЗКА ЗАВЕРШЕНА УСПЕШНО ===")
         }
     }
@@ -323,11 +323,11 @@ object ProfileProcessor {
         if (rawFile.exists()) {
             try {
                 val rawBody = rawFile.readText()
-                val finalYaml = com.github.kr328.clash.service.util.SubConverter.convert(
+                com.github.kr328.clash.service.util.SubConverter.convertToFile(
                     rawInput = rawBody,
-                    params = queryMap
+                    params = queryMap,
+                    outputFile = configFile
                 )
-                configFile.writeText(finalYaml)
 
                 // Здесь вызываем как расширение контекста
                 context.sendProfileChanged(activeUuid)
