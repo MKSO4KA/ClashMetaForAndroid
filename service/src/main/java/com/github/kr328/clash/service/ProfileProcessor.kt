@@ -23,6 +23,9 @@ import okhttp3.Request
 import java.net.URLDecoder
 import java.util.*
 import java.util.concurrent.TimeUnit
+import java.net.URLEncoder
+import com.github.kr328.clash.service.data.Database
+import com.github.kr328.clash.common.util.setUUID
 
 object ProfileProcessor {
     private val profileLock = Mutex()
@@ -256,16 +259,89 @@ object ProfileProcessor {
             }
             Log.d("[KMS] Данные получены. Размер: ${rawBody.length}")
 
+            val rawFile = context.processingDir.resolve("raw_config.txt")
+            rawFile.writeText(rawBody)
+
             val finalYaml = com.github.kr328.clash.service.util.SubConverter.convert(
                 rawInput = rawBody,
-                pingUrl = params["PingUrl"] ?: "http://cp.cloudflare.com/generate_204",
-                pingInterval = params["Ping"] ?: "300",
-                pingTolerance = params["Tolerance"] ?: "150"
+                params = params
             )
 
             val configFile = context.processingDir.resolve("config.yaml")
             configFile.writeText(finalYaml)
             Log.d("[KMS] === ЗАГРУЗКА ЗАВЕРШЕНА УСПЕШНО ===")
         }
+    }
+
+    suspend fun toggleBlacklist(context: Context, proxyName: String) {
+        val store = com.github.kr328.clash.service.store.ServiceStore(context)
+        val activeUuid = store.activeProfile ?: return
+        val dao = com.github.kr328.clash.service.data.Database.database.openImportedDao()
+        val profile = dao.queryByUUID(activeUuid) ?: return
+
+        // 1. Модифицируем параметры URL
+        val currentUrl = profile.source
+        val baseUrl = currentUrl.substringBefore("#")
+        val fragment = if (currentUrl.contains("#")) currentUrl.substringAfter("#") else ""
+
+        val queryMap = fragment.split("&")
+            .filter { s -> s.isNotBlank() }
+            .associate { s ->
+                val parts = s.split("=", limit = 2)
+                parts[0] to java.net.URLDecoder.decode(parts.getOrNull(1) ?: "", "UTF-8")
+            }.toMutableMap()
+
+        val blacklist = (queryMap["Blacklist"] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
+        val whitelist = (queryMap["Whitelist"] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
+
+        val isAutoTrash = com.github.kr328.clash.service.util.DecodeUtils.isTrash(proxyName)
+
+        if (blacklist.contains(proxyName)) {
+            blacklist.remove(proxyName)
+        } else if (whitelist.contains(proxyName)) {
+            whitelist.remove(proxyName)
+        } else {
+            if (isAutoTrash) whitelist.add(proxyName) else blacklist.add(proxyName)
+        }
+
+        queryMap["Blacklist"] = blacklist.joinToString(",")
+        queryMap["Whitelist"] = whitelist.joinToString(",")
+
+        val newFragment = queryMap.entries.joinToString("&") { e ->
+            "${e.key}=${java.net.URLEncoder.encode(e.value, "UTF-8")}"
+        }
+        val newUrl = "$baseUrl#$newFragment"
+
+        dao.update(profile.copy(source = newUrl))
+
+        // 2. Мгновенный локальный ребилд (ИСПРАВЛЕННЫЙ СИНТАКСИС)
+        // Здесь мы используем context.importedDir как свойство, а не функцию
+        val profileDir = context.importedDir.resolve(activeUuid.toString())
+        val rawFile = profileDir.resolve("raw_config.txt")
+        val configFile = profileDir.resolve("config.yaml")
+
+        if (rawFile.exists()) {
+            try {
+                val rawBody = rawFile.readText()
+                val finalYaml = com.github.kr328.clash.service.util.SubConverter.convert(
+                    rawInput = rawBody,
+                    params = queryMap
+                )
+                configFile.writeText(finalYaml)
+
+                // Здесь вызываем как расширение контекста
+                context.sendProfileChanged(activeUuid)
+                return
+            } catch (e: Exception) {
+                com.github.kr328.clash.common.log.Log.e("Local rebuild failed: ${e.message}")
+            }
+        }
+
+        // 3. Фоллбек
+        val intent = android.content.Intent(com.github.kr328.clash.common.constants.Intents.ACTION_PROFILE_REQUEST_UPDATE).apply {
+            setPackage(context.packageName)
+            setUUID(activeUuid)
+        }
+        context.startService(intent)
     }
 }

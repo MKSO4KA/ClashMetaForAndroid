@@ -2,6 +2,7 @@ package com.github.kr328.clash.design.adapter
 
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.component.ProxyView
 import com.github.kr328.clash.design.component.ProxyViewConfig
 import com.github.kr328.clash.design.component.ProxyViewState
@@ -9,6 +10,7 @@ import com.github.kr328.clash.design.component.ProxyViewState
 class ProxyAdapter(
     private val config: ProxyViewConfig,
     private val clicked: (String) -> Unit,
+    private val longClicked: (Proxy) -> Unit // Добавили коллбэк для долгого нажатия
 ) : RecyclerView.Adapter<ProxyAdapter.Holder>() {
     class Holder(val view: ProxyView) : RecyclerView.ViewHolder(view)
 
@@ -29,10 +31,21 @@ class ProxyAdapter(
                 clicked(current.proxy.name)
             }
 
+            // Умный обработчик: разрешаем лонг-тап только для реальных нод (не для групп)
+            setOnLongClickListener {
+                if (!current.proxy.type.group) {
+                    longClicked(current.proxy)
+                    true
+                } else {
+                    false
+                }
+            }
+
             val isSelector = selectable
 
             isFocusable = isSelector
             isClickable = isSelector
+            isLongClickable = !current.proxy.type.group // Включаем реакцию на лонг-тап
 
             current.update(true)
         }

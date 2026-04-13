@@ -15,7 +15,8 @@
 		<variable
             name="advanced"
             type="boolean" />
-
+        <variable name="muxExpanded" type="boolean" />
+        <variable name="fragExpanded" type="boolean" />
         <import type="com.github.kr328.clash.service.model.Profile.Type" />
         <import type="android.view.View" />
     </data>
@@ -151,7 +152,47 @@
             android:clickable="false"
             android:focusable="false" />
     </LinearLayout>
-	
+                <!-- СЕКЦИЯ ANTI-DPI (Xray Features) -->
+                <!-- Mux Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginVertical="4dp" android:background="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true" android:gravity="center_vertical"
+                    android:onClick="@{() -> self.toggleMux()}" android:paddingVertical="8dp">
+                    <ImageView android:layout_width="@dimen/tips_icon_size" android:layout_height="@dimen/tips_icon_size" android:layout_marginHorizontal="@dimen/tips_icon_margin" android:src="@drawable/ic_baseline_extension" app:tint="?attr/colorOnSurface" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Enable MUX" android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Multiplexing. Good for bad networks." android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
+                    </LinearLayout>
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="@dimen/item_tailing_margin" android:checked="@{self.isMuxEnabled}" android:clickable="false" android:focusable="false" />
+                </LinearLayout>
+
+                <!-- Расширенные настройки MUX -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="@{muxExpanded ? View.VISIBLE : View.GONE}">
+                    <com.github.kr328.clash.design.view.ActionTextField android:layout_width="match_parent" android:layout_height="wrap_content" android:onClick="@{() -> self.inputHeader(`MuxCon`, `Max Connections`)}" app:icon="@drawable/ic_baseline_more_vert" app:text="@{self.getParam(profile.source, `MuxCon`)}" app:title="Max Connections (Default: 8)" />
+                    <com.github.kr328.clash.design.view.ActionTextField android:layout_width="match_parent" android:layout_height="wrap_content" android:onClick="@{() -> self.inputHeader(`MuxMin`, `Min Streams`)}" app:icon="@drawable/ic_baseline_more_vert" app:text="@{self.getParam(profile.source, `MuxMin`)}" app:title="Min Streams (Default: 4)" />
+                </LinearLayout>
+
+                <!-- Fragment Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginVertical="4dp" android:background="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true" android:gravity="center_vertical"
+                    android:onClick="@{() -> self.toggleFragment()}" android:paddingVertical="8dp">
+                    <ImageView android:layout_width="@dimen/tips_icon_size" android:layout_height="@dimen/tips_icon_size" android:layout_marginHorizontal="@dimen/tips_icon_margin" android:src="@drawable/ic_baseline_vpn_lock" app:tint="?attr/colorOnSurface" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Enable Fragment" android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bypass SNI DPI blocking." android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
+                    </LinearLayout>
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="@dimen/item_tailing_margin" android:checked="@{self.isFragmentEnabled}" android:clickable="false" android:focusable="false" />
+                </LinearLayout>
+
+                <!-- Расширенные настройки FRAGMENT -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="@{fragExpanded ? View.VISIBLE : View.GONE}">
+                    <com.github.kr328.clash.design.view.ActionTextField android:layout_width="match_parent" android:layout_height="wrap_content" android:onClick="@{() -> self.inputHeader(`FragPack`, `Packets Type`)}" app:icon="@drawable/ic_baseline_more_vert" app:text="@{self.getParam(profile.source, `FragPack`)}" app:title="Packets (1-3, tlshello, etc)" />
+                    <com.github.kr328.clash.design.view.ActionTextField android:layout_width="match_parent" android:layout_height="wrap_content" android:onClick="@{() -> self.inputHeader(`FragLen`, `Fragment Length`)}" app:icon="@drawable/ic_baseline_more_vert" app:text="@{self.getParam(profile.source, `FragLen`)}" app:title="Length (Default: 100-200)" />
+                    <com.github.kr328.clash.design.view.ActionTextField android:layout_width="match_parent" android:layout_height="wrap_content" android:onClick="@{() -> self.inputHeader(`FragInt`, `Fragment Interval`)}" app:icon="@drawable/ic_baseline_more_vert" app:text="@{self.getParam(profile.source, `FragInt`)}" app:title="Interval (Default: 10-20)" />
+                </LinearLayout>
     <!-- СПИСОК ИЗ 9 ПОЛЕЙ -->
     <LinearLayout
         android:layout_width="match_parent"

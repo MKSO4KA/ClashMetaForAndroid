@@ -76,11 +76,17 @@ object DecodeUtils {
         return map
     }
 
+    // Заменяем старый isTrash на это:
     fun isTrash(name: String): Boolean {
-        val nLower = name.lowercase(Locale.getDefault())
-        return nLower.contains("russia") || nLower.contains("россия") ||
-                nLower.contains("бел") || nLower.contains("осталось") ||
-                nLower.contains("рф") || nLower.contains("\uD83C\uDDF7\uD83C\uDDFA") ||
-                nLower.contains("direct") || nLower.contains("expire")
+        val nLower = name.lowercase(java.util.Locale.getDefault())
+        // Умная регулярка: ищет тех.работы, мертвые ноды, истекший срок, нулевой баланс
+        val regex = "(?i)(тех.*работ|обслуживан|maintenance|dead|error|timeout|ост.*0|expire.*0|out of date|истек|expired|limit)".toRegex()
+        return regex.containsMatchIn(nLower) || nLower.contains("direct") || nLower.contains("reject")
+    }
+
+    fun isRuRb(name: String): Boolean {
+        val nLower = name.lowercase(java.util.Locale.getDefault())
+        // Определяем СНГ сегмент для маршрутизации
+        return "(?i)(ru|russia|росси|rb|belarus|беларус|\\bby\\b|\uD83C\uDDF7\uD83C\uDDFA|\uD83C\uDDE7\uD83C\uDDFE)".toRegex().containsMatchIn(nLower)
     }
 }

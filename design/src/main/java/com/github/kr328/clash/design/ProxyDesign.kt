@@ -21,6 +21,9 @@ import com.github.kr328.clash.design.util.root
 import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlin.coroutines.resume
 
 class ProxyDesign(
     context: Context,
@@ -36,6 +39,7 @@ class ProxyDesign(
         data class Reload(val index: Int) : Request()
         data class Select(val index: Int, val name: String) : Request()
         data class UrlTest(val index: Int) : Request()
+        data class ToggleBlacklist(val groupName: String, val proxy: Proxy) : Request() // Заменили DeleteProxy
     }
 
     private val binding = DesignProxyBinding
@@ -116,9 +120,16 @@ class ProxyDesign(
                     surface,
                     config,
                     List(groupNames.size) { index ->
-                        ProxyAdapter(config) { name ->
-                            requests.trySend(Request.Select(index, name))
-                        }
+                        ProxyAdapter(
+                            config = config,
+                            clicked = { name ->
+                                requests.trySend(Request.Select(index, name))
+                            },
+                            longClicked = { proxy ->
+                                // Передаем имя текущей вкладки, чтобы понять: удаляем или восстанавливаем
+                                requests.trySend(Request.ToggleBlacklist(groupNames[index], proxy))
+                            }
+                        )
                     }
                 ) {
                     if (it == currentItem)
@@ -174,4 +185,26 @@ class ProxyDesign(
             binding.urlTestProgressView.visibility = View.GONE
         }
     }
+
+
+    suspend fun confirmToggle(groupName: String, proxyName: String): Boolean = withContext(Dispatchers.Main) {
+        suspendCancellableCoroutine { ctx ->
+            val isRestoring = groupName == "Blacklisted"
+            val title = if (isRestoring) "Восстановить прокси?" else "Скрыть прокси?"
+            val msg = if (isRestoring)
+                "Вернуть «$proxyName» в основной список?"
+            else "Переместить «$proxyName» в корзину (Blacklisted)?"
+            val btn = if (isRestoring) "Восстановить" else "Скрыть"
+
+            val dialog = MaterialAlertDialogBuilder(context)
+                .setTitle(title)
+                .setMessage(msg)
+                .setPositiveButton(btn) { _, _ -> ctx.resume(true) }
+                .setNegativeButton(android.R.string.cancel) { _, _ -> ctx.resume(false) }
+                .setOnDismissListener { if (!ctx.isCompleted) ctx.resume(false) }
+                .show()
+            ctx.invokeOnCancellation { dialog.dismiss() }
+        }
+    }
+
 }

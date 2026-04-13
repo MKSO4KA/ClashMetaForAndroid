@@ -11,6 +11,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import android.widget.Toast
+import android.content.Intent as AndroidIntent
+import com.github.kr328.clash.common.util.setUUID
+import com.github.kr328.clash.common.constants.Intents
+import com.github.kr328.clash.service.store.ServiceStore
+import com.github.kr328.clash.service.data.Database
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 class ProxyActivity : BaseActivity<ProxyDesign>() {
     override suspend fun main() {
@@ -42,8 +52,10 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                             if (newNames != names) {
                                 startActivity(ProxyActivity::class.intent)
-
                                 finish()
+                            } else {
+                                // ДОБАВЛЕНО: обновляем список, если просто удалили ноду
+                                design.requests.send(ProxyDesign.Request.ReloadAll)
                             }
                         }
                         else -> Unit
@@ -108,6 +120,19 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 o.mode = it.mode
 
                                 patchOverride(Clash.OverrideSlot.Session, o)
+                            }
+                        }
+                        is ProxyDesign.Request.ToggleBlacklist -> {
+                            launch {
+                                if (design.confirmToggle(it.groupName, it.proxy.name)) {
+                                    withContext(Dispatchers.IO) {
+                                        com.github.kr328.clash.service.ProfileProcessor.toggleBlacklist(
+                                            this@ProxyActivity,
+                                            it.proxy.name
+                                        )
+                                    }
+                                    Toast.makeText(this@ProxyActivity, "Статус изменен", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     }

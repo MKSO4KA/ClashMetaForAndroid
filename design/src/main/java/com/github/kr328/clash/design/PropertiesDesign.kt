@@ -40,6 +40,29 @@ class PropertiesDesign(context: Context) : Design<PropertiesDesign.Request>(cont
     fun toggleAdvanced() {
         advanced = !advanced
     }
+    // В начало класса PropertiesDesign, где `var advanced: Boolean`
+    var muxExpanded: Boolean = false
+        set(value) { field = value; binding.muxExpanded = value }
+
+    var fragExpanded: Boolean = false
+        set(value) { field = value; binding.fragExpanded = value }
+
+    val isMuxEnabled: Boolean get() = getParam(profile.source, "Mux") == "1"
+    val isFragmentEnabled: Boolean get() = getParam(profile.source, "Fragment") == "1"
+
+    fun toggleMux() {
+        val newState = if (isMuxEnabled) "0" else "1"
+        profile = profile.copy(source = updateUrlParam(profile.source, "Mux", newState))
+        muxExpanded = newState == "1" // Раскрываем настройки при включении
+        binding.invalidateAll()
+    }
+
+    fun toggleFragment() {
+        val newState = if (isFragmentEnabled) "0" else "1"
+        profile = profile.copy(source = updateUrlParam(profile.source, "Fragment", newState))
+        fragExpanded = newState == "1"
+        binding.invalidateAll()
+    }
 
     // ================== БАЗОВЫЕ ФУНКЦИИ ==================
     suspend fun withProcessing(executeTask: suspend (suspend (FetchStatus) -> Unit) -> Unit) {
@@ -64,7 +87,41 @@ class PropertiesDesign(context: Context) : Design<PropertiesDesign.Request>(cont
             ctx.invokeOnCancellation { dialog.dismiss() }
         }
     }
+    // ================== ANTI-DPI & AI SETTINGS ==================
 
+
+    fun inputAiUrl() {
+        launch {
+            val current = getParam(profile.source, "PingUrl")
+            val defaultAi = "https://generativelanguage.googleapis.com/generate_204" // Google Gemini API
+            val newVal = context.requestModelTextInput(
+                initial = current.ifBlank { defaultAi },
+                title = "AI Check URL",
+                hint = defaultAi,
+                error = "",
+                validator = { true }
+            )
+            if (newVal != current) {
+                profile = profile.copy(source = updateUrlParam(profile.source, "PingUrl", newVal))
+            }
+        }
+    }
+
+    fun inputBlacklist() {
+        launch {
+            val current = getParam(profile.source, "Blacklist")
+            val newVal = context.requestModelTextInput(
+                initial = current,
+                title = "Manual Exclusion (Blacklist)",
+                hint = "comma, separated, names",
+                error = "",
+                validator = { true }
+            )
+            if (newVal != current) {
+                profile = profile.copy(source = updateUrlParam(profile.source, "Blacklist", newVal))
+            }
+        }
+    }
     init {
         binding.self = this
         binding.activityBarLayout.applyFrom(context)
