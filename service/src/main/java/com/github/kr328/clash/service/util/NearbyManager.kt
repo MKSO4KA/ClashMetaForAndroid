@@ -10,6 +10,9 @@ import com.google.android.gms.nearby.connection.*
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.util.UUID
+import com.github.kr328.clash.service.util.importedDir
+import com.github.kr328.clash.service.util.sendProfileChanged
+import com.github.kr328.clash.service.util.generateProfileUUID
 
 object NearbyManager {
     private const val SERVICE_ID = "com.github.kr328.clash.MESH_BRIDGE"
@@ -114,20 +117,28 @@ object NearbyManager {
     }
 
     // --- СЕРВИСНЫЕ МЕТОДЫ УПАКОВКИ/РАСПАКОВКИ ---
+    // --- СЕРВИСНЫЕ МЕТОДЫ УПАКОВКИ/РАСПАКОВКИ ---
     private suspend fun buildProfilePayload(context: Context, uuid: UUID): ByteArray? {
         val profileDir = context.importedDir.resolve(uuid.toString())
-        val rawFile = profileDir.resolve("raw_config.txt")
-        val configFile = profileDir.resolve("config.yaml")
+        val rawFile = profileDir.resolve("raw_config.gz")
+        val metaFile = profileDir.resolve("metadata.txt") // Наш файл со списками
 
-        val targetFile = if (rawFile.exists()) rawFile else if (configFile.exists()) configFile else return null
+        if (!rawFile.exists()) return null
 
         val dao = Database.database.openImportedDao()
         val profile = dao.queryByUUID(uuid) ?: return null
 
         val json = JSONObject()
         json.put("name", "${profile.name} (Mesh)")
-        json.put("sourceUrl", profile.source)
-        json.put("rawConfig", targetFile.readText())
+        json.put("sourceUrl", profile.source) // Здесь живут Mux, Fragment, UA и т.д.
+
+        // Читаем метаданные (черный/белый списки), если они есть
+        val metaData = if (metaFile.exists()) metaFile.readText() else ":"
+        json.put("metaData", metaData)
+
+        // Бинарный конфиг в Base64
+        json.put("rawConfigGzipB64", android.util.Base64.encodeToString(rawFile.readBytes(), android.util.Base64.NO_WRAP))
+
         return json.toString().toByteArray(Charsets.UTF_8)
     }
 
@@ -135,23 +146,38 @@ object NearbyManager {
         val json = JSONObject(String(bytes, Charsets.UTF_8))
         val newUuid = generateProfileUUID()
         val sourceUrl = json.getString("sourceUrl")
-        val rawConfig = json.getString("rawConfig")
+        val rawConfigGzipBytes = android.util.Base64.decode(json.getString("rawConfigGzipB64"), android.util.Base64.NO_WRAP)
+        val receivedMeta = json.optString("metaData", ":")
 
+        // 1. Создаем запись в БД (сохраняем sourceUrl со всеми параметрами #...)
         val dao = Database.database.openImportedDao()
         val newProfile = Imported(
             uuid = newUuid, name = json.getString("name"), type = Profile.Type.Url,
             source = sourceUrl, interval = 0, upload = 0, download = 0, total = 0, expire = 0, createdAt = System.currentTimeMillis()
         )
 
+        // 2. Подготавливаем файлы
         val profileDir = context.importedDir.resolve(newUuid.toString())
         profileDir.mkdirs()
-        profileDir.resolve("raw_config.txt").writeText(rawConfig)
+
+        profileDir.resolve("raw_config.gz").writeBytes(rawConfigGzipBytes)
+        profileDir.resolve("metadata.txt").writeText(receivedMeta) // Клонируем черный список
+
+        // 3. Собираем финальный YAML из полученных данных
+        val parts = receivedMeta.split(":")
+        val blacklist = parts.getOrElse(0) { "" }.replace("|", ",")
+        val whitelist = parts.getOrElse(1) { "" }.replace("|", ",")
 
         val queryMap = (if (sourceUrl.contains("#")) sourceUrl.substringAfter("#") else "").split("&")
             .filter { it.isNotBlank() }
             .associate { val p = it.split("=", limit = 2); p[0] to java.net.URLDecoder.decode(p.getOrNull(1) ?: "", "UTF-8") }
+            .toMutableMap()
 
-        SubConverter.convertToFile(rawConfig, queryMap, profileDir.resolve("config.yaml"))
+        // Добавляем списки в параметры конвертера
+        queryMap["Blacklist"] = blacklist
+        queryMap["Whitelist"] = whitelist
+
+        SubConverter.convertToFile(rawConfigGzipBytes, queryMap, profileDir.resolve("config.yaml"))
 
         dao.insert(newProfile)
         context.sendProfileChanged(newUuid)
@@ -160,5 +186,9 @@ object NearbyManager {
     private class PayloadCallbackHelper : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {}
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
+    }
+    // --- ПУБЛИЧНЫЙ ВРАППЕР ДЛЯ ADB ТЕСТОВ ---
+    suspend fun processReceivedPayloadPublic(context: Context, bytes: ByteArray) {
+        processReceivedPayload(context, bytes)
     }
 }

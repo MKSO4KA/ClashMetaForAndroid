@@ -57,13 +57,21 @@ object YamlBuilder {
         val pingInt = params["Ping"] ?: "300"
         val pingTol = params["Tolerance"] ?: "150"
 
-        // 1. ПИШЕМ ПРОКСИ В ПОТОК
+        // 1. ГЛОБАЛЬНЫЕ ПАРАМЕТРЫ (Local Proxy для Телеграма и LAN)
+        writer.write("mixed-port: 7893\n")
+        writer.write("allow-lan: true\n")
+        writer.write("bind-address: \"*\"\n")
+        writer.write("mode: rule\n")
+        writer.write("log-level: info\n")
+        writer.write("ipv6: false\n\n")
+
+        // 2. ПИШЕМ ПРОКСИ В ПОТОК
         writer.write("proxies:\n")
         proxies.forEach { node ->
             writeProxyBlock(node, params, writer)
         }
 
-        // 2. ПИШЕМ ГРУППЫ В ПОТОК
+        // 3. ПИШЕМ ГРУППЫ В ПОТОК
         writer.write("\nproxy-groups:\n")
 
         writer.write("- name: PROXY\n  type: select\n  proxies:\n")
@@ -72,7 +80,7 @@ object YamlBuilder {
             if (hasRuRb) writer.write("    - RU/RB-Auto\n")
             writer.write("    - Manual-Select\n")
         } else {
-            writer.write("    - DIRECT\n")
+            writer.write("    - DIRECT\n") // Защита от пустого списка
         }
 
         writer.write("\n- name: Overseas-Auto\n  type: url-test\n  url: \"$pingUrl\"\n  interval: $pingInt\n  tolerance: $pingTol\n  proxies:\n")
@@ -102,7 +110,11 @@ object YamlBuilder {
             writer.write("    - DIRECT\n")
         }
 
-        writer.write("\n\nrules:\n  - DOMAIN,rezvorck.github.io,REJECT\n  - DOMAIN,tigr1234566.github.io,REJECT\n  - MATCH,PROXY\n")
+        // 4. ПРАВИЛА (Фикс вылета ColorOS: REJECT -> REJECT-DROP)
+        writer.write("\n\nrules:\n")
+        writer.write("  - DOMAIN,rezvorck.github.io,REJECT-DROP\n")
+        writer.write("  - DOMAIN,tigr1234566.github.io,REJECT-DROP\n")
+        writer.write("  - MATCH,PROXY\n")
     }
 
     private fun writeProxyBlock(node: ProxyNode, params: Map<String, String>, writer: Writer) {
@@ -128,7 +140,10 @@ object YamlBuilder {
             }
             ProxyType.VLESS -> {
                 writer.write("    uuid: \"${node.uuid}\"\n")
-                if (node.flow.isNotBlank()) writer.write("    flow: ${node.flow}\n")
+                // Согласно документации Mihomo, для gRPC flow должен быть пустым
+                if (node.network != "grpc" && node.flow.isNotBlank()) {
+                    writer.write("    flow: ${node.flow}\n")
+                }
                 writeTlsAndTransportStr(node, supportsAntiDpi, params, writer)
             }
             ProxyType.VMESS -> {
@@ -148,38 +163,48 @@ object YamlBuilder {
         }
     }
 
-    private fun writeTlsAndTransportStr(node: ProxyNode, supportsAntiDpi: Boolean, params: Map<String, String>, writer: Writer) {
+    private fun writeTlsAndTransportStr(node: ProxyNode, supportsAntiDpi: Boolean, params: Map<String, String>, writer: java.io.Writer) {
+        // 1. СЕТЬ (Transport)
         if (node.network != "tcp") {
             writer.write("    network: ${node.network}\n")
             when (node.network) {
-                "ws" -> {
-                    writer.write("    ws-opts:\n      path: \"${node.wsPath}\"\n")
-                    if (node.wsHeaders.isNotEmpty()) {
-                        writer.write("      headers:\n")
-                        node.wsHeaders.forEach { (k, v) -> writer.write("        $k: \"$v\"\n") }
-                    }
+                "ws" -> writer.write("    ws-opts:\n      path: \"${node.wsPath}\"\n")
+                "grpc" -> {
+                    writer.write("    grpc-opts:\n")
+                    // ВАЖНО: Только grpc-service-name, как в официальной документации Mihomo
+                    writer.write("      grpc-service-name: \"${node.grpcServiceName}\"\n")
                 }
-                "grpc" -> writer.write("    grpc-opts:\n      grpc-service-name: \"${node.grpcServiceName}\"\n")
-                "xhttp", "httpupgrade" -> writer.write("    xhttp-opts:\n      path: \"${node.xhttpPath}\"\n      mode: \"${node.xhttpMode}\"\n")
             }
         }
 
+        // 2. TLS, ALPN и REALITY
         if (node.tls) {
             writer.write("    tls: true\n")
             if (node.sni.isNotBlank()) writer.write("    servername: \"${node.sni}\"\n")
-            if (node.fingerprint.isNotBlank()) writer.write("    client-fingerprint: ${node.fingerprint}\n")
-            if (node.skipCertVerify) writer.write("    skip-cert-verify: true\n")
+
+            // Для gRPC обязателен h2
+            if (node.network == "grpc") {
+                writer.write("    alpn: [h2]\n")
+            } else if (node.alpn.isNotEmpty()) {
+                writer.write("    alpn: [${node.alpn.joinToString(", ")}]\n")
+            }
+
+            val finalFingerprint = if (node.fingerprint.isBlank() || node.fingerprint == "null") "chrome" else node.fingerprint
+            writer.write("    client-fingerprint: $finalFingerprint\n")
+
             if (node.isReality) {
                 writer.write("    reality-opts:\n      public-key: \"${node.realityPubKey}\"\n")
-                if (node.realityShortId.isNotBlank()) writer.write("      short-id: \"${node.realityShortId}\"\n")
+                if (!node.realityShortId.isNullOrBlank() && node.realityShortId != "null") {
+                    writer.write("      short-id: \"${node.realityShortId}\"\n")
+                }
             }
         }
 
-        if (supportsAntiDpi && params["Fragment"] == "1" && (node.tls || node.network == "tcp")) {
+        // 3. ФРАГМЕНТАЦИЯ (Отключаем для gRPC, так как она его ломает)
+        if (node.network != "grpc" && supportsAntiDpi && params["Fragment"] == "1" && (node.tls || node.network == "tcp")) {
             val fPackets = params["FragPack"] ?: "tlshello"
             val fLen = params["FragLen"] ?: "100-200"
             val fInt = params["FragInt"] ?: "10-20"
-            writer.write("    client-fingerprint: chrome\n")
             writer.write("    fragment:\n      enabled: true\n      packets: $fPackets\n      length: $fLen\n      interval: $fInt\n")
         }
     }

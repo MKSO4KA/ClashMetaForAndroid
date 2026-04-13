@@ -29,6 +29,7 @@ data class ProxyNode(
     var wsPath: String = "/",
     var wsHeaders: Map<String, String> = emptyMap(),
     var grpcServiceName: String = "",
+    var grpcAuthority: String = "",
     var xhttpPath: String = "/",
     var xhttpMode: String = "auto",
 

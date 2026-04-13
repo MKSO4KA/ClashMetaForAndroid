@@ -1,6 +1,7 @@
 package com.github.kr328.clash
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -29,6 +30,8 @@ import kotlinx.coroutines.withContext
 import java.util.*
 import java.util.concurrent.TimeUnit
 import com.github.kr328.clash.design.R
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 
 class ProfilesActivity : BaseActivity<ProfilesDesign>() {
 
@@ -67,6 +70,62 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         pendingNearbyAction = action
         requestPermissionLauncher.launch(permissions.toTypedArray())
     }
+    // --- ADB DEBUGGER ДЛЯ ЭМУЛЯТОРА ---
+    // Команда для теста в терминале:
+    // adb shell am broadcast -a com.github.kr328.clash.DEBUG_INJECT_MESH --es "payload" "ТУТ_BASE64_GZIP_СТРОКА"
+
+    private val adbMeshReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.github.kr328.clash.DEBUG_INJECT_MESH") {
+                val payloadString = intent.getStringExtra("payload")
+                if (payloadString.isNullOrBlank()) {
+                    android.widget.Toast.makeText(context, "[ADB] Пустой payload!", android.widget.Toast.LENGTH_SHORT).show()
+                    return
+                }
+
+                showMeshDialog("[ADB] Симуляция Mesh") { updateUI ->
+                    launch(Dispatchers.IO) {
+                        try {
+                            withContext(Dispatchers.Main) { updateUI("Получен пакет. Декодирование...", false) }
+
+                            val jsonBytes = android.util.Base64.decode(payloadString, android.util.Base64.NO_WRAP)
+                            NearbyManager.processReceivedPayloadPublic(this@ProfilesActivity, jsonBytes)
+
+                            withContext(Dispatchers.Main) { updateUI("Успешно импортировано!", true) }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) { updateUI("Ошибка: ${e.message}", true) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Регистрация ресивера при старте экрана
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    override fun onStart() {
+        super.onStart()
+
+        // Включаем ADB-инжектор только в дебаг-сборках (Senior Security Practice)
+        if (com.github.kr328.clash.BuildConfig.DEBUG) {
+            val filter = IntentFilter("com.github.kr328.clash.DEBUG_INJECT_MESH")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(adbMeshReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(adbMeshReceiver, filter)
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        if (com.github.kr328.clash.BuildConfig.DEBUG) {
+            try {
+                unregisterReceiver(adbMeshReceiver)
+            } catch (e: Exception) { }
+        }
+    }
+
 
     // --- ЛОГИКА QR СКАНЕРА (QUICKIE) ---
     private val scanQrLauncher = registerForActivityResult(ScanQRCode()) { result ->

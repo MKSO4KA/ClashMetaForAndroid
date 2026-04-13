@@ -54,7 +54,7 @@ object ProxyParser {
                 val vnext = settings.optJSONArray("vnext")?.optJSONObject(0) ?: continue
                 val user = vnext.optJSONArray("users")?.optJSONObject(0) ?: continue
 
-                val node = ProxyNode(name = name, isTrash = DecodeUtils.isTrash(name))
+                val node = ProxyNode(name = name, isTrash = DecodeUtils.isTrash(name), udp = true)
 
                 node.type = when (protocol) {
                     "vless" -> ProxyType.VLESS
@@ -74,17 +74,24 @@ object ProxyParser {
                 }
 
                 node.network = stream.optString("network", "tcp")
-                node.flow = user.optString("flow", "")
+
+                if (node.network == "grpc") {
+                    node.flow = "" // gRPC не использует flow
+                    val grpcJson = stream.optJSONObject("grpcSettings")
+                    val sName = grpcJson?.optString("serviceName", "") ?: ""
+                    node.grpcServiceName = if (sName.isBlank() || sName == "null") "grpc" else sName
+                    node.grpcAuthority = grpcJson?.optString("authority", "") ?: ""
+                } else {
+                    node.flow = user.optString("flow", "")
+                }
+
                 node.cipher = user.optString("encryption", "none").ifBlank { "auto" }
 
-                when (node.network) {
-                    "grpc" -> node.grpcServiceName = stream.optJSONObject("grpcSettings")?.optString("serviceName") ?: ""
-                    "ws" -> {
-                        val ws = stream.optJSONObject("wsSettings")
-                        node.wsPath = ws?.optString("path") ?: "/"
-                        val host = ws?.optJSONObject("headers")?.optString("Host")
-                        if (!host.isNullOrBlank()) node.wsHeaders = mapOf("Host" to host)
-                    }
+                if (node.network == "ws") {
+                    val ws = stream.optJSONObject("wsSettings")
+                    node.wsPath = ws?.optString("path") ?: "/"
+                    val host = ws?.optJSONObject("headers")?.optString("Host")
+                    if (!host.isNullOrBlank()) node.wsHeaders = mapOf("Host" to host)
                 }
 
                 node.security = stream.optString("security", "none")
@@ -151,18 +158,34 @@ object ProxyParser {
             type = type,
             server = server,
             port = port,
-            isTrash = DecodeUtils.isTrash(name)
+            isTrash = DecodeUtils.isTrash(name),
+            udp = true
         )
 
         if (type == ProxyType.VLESS) node.uuid = uuidOrPass else node.password = uuidOrPass
 
-        val security = params["security"] ?: ""
+        node.network = params["type"] ?: params["net"] ?: "tcp"
+
+        // ФИНАЛЬНЫЙ ФИКС ДЛЯ gRPC
+        if (node.network == "grpc") {
+            node.flow = "" // Согласно документации Mihomo, flow должен быть пустым
+            val sName = params["serviceName"] ?: params["servicename"] ?: ""
+            // Если в ссылке пусто, подставляем "grpc" - стандарт для Xray
+            node.grpcServiceName = if (sName.isBlank() || sName == "null") "grpc" else sName
+            val sAuth = params["authority"] ?: params["host"] ?: ""
+            node.grpcAuthority = if (sAuth.isBlank() || sAuth == "null") "" else sAuth
+        } else {
+            node.flow = params["flow"] ?: ""
+        }
+
+        val security = params["security"] ?: params["tls"] ?: ""
         if (security == "reality" || security == "tls" || type == ProxyType.TROJAN) {
             node.tls = true
-            node.sni = params["sni"] ?: params["peer"] ?: ""
-            node.fingerprint = params["fp"] ?: ""
+            node.sni = params["sni"] ?: params["peer"] ?: node.grpcAuthority.ifBlank { server }
+            val rawFp = params["fp"] ?: ""
+            node.fingerprint = if (rawFp.isBlank() || rawFp == "null") "chrome" else rawFp
             node.alpn = params["alpn"]?.split(",") ?: emptyList()
-            node.skipCertVerify = params["allowInsecure"] == "1"
+            node.skipCertVerify = params["allowInsecure"] == "1" || params["insecure"] == "1"
 
             if (security == "reality") {
                 node.isReality = true
@@ -171,22 +194,12 @@ object ProxyParser {
             }
         }
 
-        node.flow = params["flow"] ?: ""
-        node.network = params["type"] ?: "tcp"
-        when (node.network) {
-            "ws" -> {
-                node.wsPath = params["path"] ?: "/"
-                val host = params["host"]
-                if (!host.isNullOrBlank()) node.wsHeaders = mapOf("Host" to host)
-            }
-            "grpc" -> node.grpcServiceName = params["serviceName"] ?: params["authority"] ?: ""
-            "xhttp", "httpupgrade" -> {
-                node.xhttpPath = params["path"] ?: "/"
-                node.xhttpMode = params["mode"] ?: "auto"
-                val host = params["host"]
-                if (!host.isNullOrBlank()) node.wsHeaders = mapOf("Host" to host)
-            }
+        if (node.network == "ws") {
+            node.wsPath = params["path"] ?: "/"
+            val host = params["host"]
+            if (!host.isNullOrBlank()) node.wsHeaders = mapOf("Host" to host)
         }
+
         return node
     }
 
@@ -213,7 +226,8 @@ object ProxyParser {
             network = json.optString("net", "tcp"),
             tls = json.optString("tls") == "tls" || json.optString("tls") == "reality",
             sni = json.optString("sni", json.optString("host")),
-            isTrash = DecodeUtils.isTrash(name)
+            isTrash = DecodeUtils.isTrash(name),
+            udp = true
         )
 
         when (node.network) {
@@ -222,7 +236,10 @@ object ProxyParser {
                 val host = json.optString("host")
                 if (host.isNotBlank()) node.wsHeaders = mapOf("Host" to host)
             }
-            "grpc" -> node.grpcServiceName = json.optString("path")
+            "grpc" -> {
+                val sName = json.optString("path", "")
+                node.grpcServiceName = if (sName.isBlank() || sName == "null") "grpc" else sName
+            }
         }
         return node
     }
