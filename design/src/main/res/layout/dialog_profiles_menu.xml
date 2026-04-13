@@ -37,6 +37,14 @@
             android:padding="@dimen/bottom_sheet_menu_items_padding"
             app:icon="@drawable/ic_baseline_edit"
             app:text="@string/edit" />
+        <com.github.kr328.clash.design.view.LargeActionLabel
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:onClick="@{() -> master.requestShare(self, profile)}"
+            android:padding="@dimen/bottom_sheet_menu_items_padding"
+            android:visibility="@{profile.imported ? View.VISIBLE : View.GONE}"
+            app:icon="@drawable/ic_baseline_publish"
+            app:text="Отправить (Офлайн)" />
 
         <com.github.kr328.clash.design.view.LargeActionLabel
             android:layout_width="match_parent"

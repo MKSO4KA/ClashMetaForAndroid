@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.androidx.activity.ktx)
 
     implementation(libs.google.nearby)
+    implementation(libs.zxing.core)
 }
 
 tasks.getByName("clean", type = Delete::class) {

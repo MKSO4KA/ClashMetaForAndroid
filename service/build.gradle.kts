@@ -8,6 +8,7 @@ plugins {
 dependencies {
     implementation(project(":core"))
     implementation(project(":common"))
+    implementation(libs.play.services.nearby)
 
     ksp(libs.kaidl.compiler)
     ksp(libs.androidx.room.compiler)

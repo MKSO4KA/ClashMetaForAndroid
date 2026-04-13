@@ -25,8 +25,17 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class Edit(val profile: Profile) : Request()
         data class Duplicate(val profile: Profile) : Request()
         data class Delete(val profile: Profile) : Request()
+        data class Share(val profile: Profile) : Request()
+        object Receive : Request()
+    }
+    fun requestShare(dialog: Dialog, profile: Profile) {
+        requests.trySend(Request.Share(profile))
+        dialog.dismiss()
     }
 
+    fun requestReceive() {
+        requests.trySend(Request.Receive)
+    }
     private val binding = DesignProfilesBinding
         .inflate(context.layoutInflater, context.root, false)
     private val adapter = ProfileAdapter(context, this::requestActive, this::showMenu)
