@@ -240,7 +240,20 @@ object ProfileProcessor {
                 throw Exception("Server returned error ${response.code}")
             }
 
-            val rawBody = response.body?.string() ?: ""
+            val isGzipped = response.header("Content-Encoding") == "gzip"
+
+            val rawBody = if (isGzipped) {
+                // Если сжато - распаковываем вручную
+                java.util.zip.GZIPInputStream(response.body?.byteStream()).bufferedReader().use { it.readText() }
+            } else {
+                // Если не сжато - читаем как обычно
+                response.body?.string() ?: ""
+            }
+
+            Log.d("[KMS] Данные получены. Размер (после распаковки): ${rawBody.length}")
+            if (rawBody.isNotEmpty()) {
+                Log.d("[KMS] Первые 20 символов тела: ${rawBody.take(20)}")
+            }
             Log.d("[KMS] Данные получены. Размер: ${rawBody.length}")
 
             val finalYaml = com.github.kr328.clash.service.util.SubConverter.convert(
