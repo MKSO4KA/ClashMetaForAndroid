@@ -37,17 +37,25 @@ object ProfileProcessor {
         val store = ServiceStore(context)
         val activeUuid = store.activeProfile ?: return
         val profileDir = context.importedDir.resolve(activeUuid.toString())
-        val metadataFile = profileDir.resolve("metadata.txt") // Файл для списков
+        val metadataFile = profileDir.resolve("metadata.json") // Переходим на JSON
 
-        // 1. Читаем текущие списки из файла (формат: имя|имя|имя)
-        val currentData = if (metadataFile.exists()) metadataFile.readText() else ":"
-        val parts = currentData.split(":") // [0] - blacklist, [1] - whitelist
-        val blacklist = parts.getOrElse(0) { "" }.split("|").filter { it.isNotBlank() }.toMutableSet()
-        val whitelist = parts.getOrElse(1) { "" }.split("|").filter { it.isNotBlank() }.toMutableSet()
+        // 1. Читаем существующие списки
+        val blacklist = mutableSetOf<String>()
+        val whitelist = mutableSetOf<String>()
+
+        if (metadataFile.exists()) {
+            try {
+                val json = org.json.JSONObject(metadataFile.readText())
+                val bArray = json.optJSONArray("blacklist")
+                val wArray = json.optJSONArray("whitelist")
+                if (bArray != null) for (i in 0 until bArray.length()) blacklist.add(bArray.getString(i))
+                if (wArray != null) for (i in 0 until wArray.length()) whitelist.add(wArray.getString(i))
+            } catch (e: Exception) { Log.e("Metadata read error: ${e.message}") }
+        }
 
         val isAutoTrash = com.github.kr328.clash.service.util.DecodeUtils.isTrash(proxyName)
 
-        // Логика переключения
+        // 2. Умное переключение (Toggle)
         if (blacklist.contains(proxyName)) {
             blacklist.remove(proxyName)
         } else if (whitelist.contains(proxyName)) {
@@ -56,37 +64,33 @@ object ProfileProcessor {
             if (isAutoTrash) whitelist.add(proxyName) else blacklist.add(proxyName)
         }
 
-        // 2. Сохраняем обратно в файл (это не переполнит БД!)
-        val newData = "${blacklist.joinToString("|")}:${whitelist.joinToString("|")}"
-        metadataFile.writeText(newData)
+        // 3. Сохраняем обратно в JSON (Senior-way: надежное хранение)
+        val newJson = org.json.JSONObject()
+        newJson.put("blacklist", org.json.JSONArray(blacklist))
+        newJson.put("whitelist", org.json.JSONArray(whitelist))
+        metadataFile.writeText(newJson.toString())
 
-        // 3. Мгновенный локальный ребилд
+        // 4. Мгновенный ребилд
         val rawFile = profileDir.resolve("raw_config.gz")
         val configFile = profileDir.resolve("config.yaml")
 
         if (rawFile.exists()) {
-            try {
-                // Извлекаем настройки (Mux/Frag) из URL
-                val dao = com.github.kr328.clash.service.data.Database.database.openImportedDao()
-                val profile = dao.queryByUUID(activeUuid) ?: return
-                val params = profile.source.substringAfter("#", "").split("&")
-                    .filter { it.isNotBlank() }
-                    .associate { val p = it.split("=", limit = 2); p[0] to URLDecoder.decode(p.getOrNull(1) ?: "", "UTF-8") }
-                    .toMutableMap()
+            val dao = com.github.kr328.clash.service.data.Database.database.openImportedDao()
+            val profile = dao.queryByUUID(activeUuid) ?: return
+            val params = profile.source.substringAfter("#", "").split("&")
+                .filter { it.isNotBlank() }
+                .associate { val p = it.split("=", limit = 2); p[0] to URLDecoder.decode(p.getOrNull(1) ?: "", "UTF-8") }
+                .toMutableMap()
 
-                // Добавляем списки из файла в мапу параметров для генератора
-                params["Blacklist"] = blacklist.joinToString(",")
-                params["Whitelist"] = whitelist.joinToString(",")
+            params["Blacklist"] = blacklist.joinToString(",")
+            params["Whitelist"] = whitelist.joinToString(",")
 
-                com.github.kr328.clash.service.util.SubConverter.convertToFile(
-                    rawInputBytes = rawFile.readBytes(),
-                    params = params,
-                    outputFile = configFile
-                )
-                context.sendProfileChanged(activeUuid)
-            } catch (e: Exception) {
-                Log.e("Local rebuild failed: ${e.message}")
-            }
+            com.github.kr328.clash.service.util.SubConverter.convertToFile(
+                rawInputBytes = rawFile.readBytes(),
+                params = params,
+                outputFile = configFile
+            )
+            context.sendProfileChanged(activeUuid)
         }
     }
     suspend fun apply(context: Context, uuid: UUID, callback: IFetchObserver? = null) {
@@ -243,8 +247,28 @@ object ProfileProcessor {
             fragment.split("&").filter { it.isNotBlank() }.associate {
                 val parts = it.split("=", limit = 2)
                 parts[0] to (URLDecoder.decode(parts.getOrNull(1) ?: "", "UTF-8"))
-            }
-        } else emptyMap()
+            }.toMutableMap()
+        } else mutableMapOf<String, String>()
+
+        // SENIOR FIX: Читаем сохраненные списки из JSON
+        val metadataFile = context.processingDir.resolve("metadata.json")
+        if (metadataFile.exists()) {
+            try {
+                val json = org.json.JSONObject(metadataFile.readText())
+                val bArray = json.optJSONArray("blacklist")
+                val wArray = json.optJSONArray("whitelist")
+
+                val bList = mutableListOf<String>()
+                val wList = mutableListOf<String>()
+
+                if (bArray != null) for (i in 0 until bArray.length()) bList.add(bArray.getString(i))
+                if (wArray != null) for (i in 0 until wArray.length()) wList.add(wArray.getString(i))
+
+                if (bList.isNotEmpty()) params["Blacklist"] = bList.joinToString(",")
+                if (wList.isNotEmpty()) params["Whitelist"] = wList.joinToString(",")
+                Log.d("[KMS] Метаданные загружены успешно из JSON.")
+            } catch (e: Exception) { Log.e("Metadata processing error: ${e.message}") }
+        }
 
         val autoHwid = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "00000000"
         val client = OkHttpClient.Builder()
@@ -261,20 +285,17 @@ object ProfileProcessor {
         try {
             client.newCall(reqBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful) throw Exception("Server error ${response.code}")
-
                 val responseBytes = response.body?.bytes() ?: throw Exception("Empty response")
 
                 val isAlreadyGzipped = responseBytes.size >= 2 && responseBytes[0].toInt() == 0x1F && (responseBytes[1].toInt() and 0xFF) == 0x8B
                 val finalRawBytes = if (isAlreadyGzipped) responseBytes else {
                     val baos = ByteArrayOutputStream()
-                    GZIPOutputStream(baos).use { it.write(responseBytes) }
+                    java.util.zip.GZIPOutputStream(baos).use { it.write(responseBytes) }
                     baos.toByteArray()
                 }
 
-                // Сохраняем свежий кэш
                 context.processingDir.resolve("raw_config.gz").writeBytes(finalRawBytes)
 
-                // Генерируем YAML
                 com.github.kr328.clash.service.util.SubConverter.convertToFile(
                     rawInputBytes = finalRawBytes,
                     params = params,
@@ -282,23 +303,15 @@ object ProfileProcessor {
                 )
             }
         } catch (e: Exception) {
-            Log.w("[KMS] Сеть недоступна, проверяем локальный кэш...")
-
-            // SENIOR LOGIC: Если сеть упала, но у нас в папке обработки ЕСТЬ старый raw_config.gz
-            // (он туда копируется системой перед началом обновления), то просто используем его!
+            Log.w("[KMS] Сеть недоступна, используем кэш...")
             val cachedRaw = context.processingDir.resolve("raw_config.gz")
             if (cachedRaw.exists()) {
-                Log.i("[KMS] Используем локальный кэш для обновления настроек.")
                 com.github.kr328.clash.service.util.SubConverter.convertToFile(
                     rawInputBytes = cachedRaw.readBytes(),
                     params = params,
                     outputFile = context.processingDir.resolve("config.yaml")
                 )
-                // Ошибка не выбрасывается, пользователь даже не заметит, что инета не было
-            } else {
-                // Если и инета нет, и кэша нет (новый профиль) — тогда уже честная ошибка
-                throw e
-            }
+            } else throw e
         }
     }
 }

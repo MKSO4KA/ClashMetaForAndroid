@@ -121,7 +121,9 @@ object NearbyManager {
     private suspend fun buildProfilePayload(context: Context, uuid: UUID): ByteArray? {
         val profileDir = context.importedDir.resolve(uuid.toString())
         val rawFile = profileDir.resolve("raw_config.gz")
-        val metaFile = profileDir.resolve("metadata.txt") // Наш файл со списками
+        // Читаем метаданные (теперь из JSON файла)
+        val metaFile = profileDir.resolve("metadata.json")
+
 
         if (!rawFile.exists()) return null
 
@@ -133,8 +135,7 @@ object NearbyManager {
         json.put("sourceUrl", profile.source) // Здесь живут Mux, Fragment, UA и т.д.
 
         // Читаем метаданные (черный/белый списки), если они есть
-        val metaData = if (metaFile.exists()) metaFile.readText() else ":"
-        json.put("metaData", metaData)
+        json.put("metaDataJson", if (metaFile.exists()) metaFile.readText() else "{}")
 
         // Бинарный конфиг в Base64
         json.put("rawConfigGzipB64", android.util.Base64.encodeToString(rawFile.readBytes(), android.util.Base64.NO_WRAP))
@@ -161,21 +162,26 @@ object NearbyManager {
         profileDir.mkdirs()
 
         profileDir.resolve("raw_config.gz").writeBytes(rawConfigGzipBytes)
-        profileDir.resolve("metadata.txt").writeText(receivedMeta) // Клонируем черный список
 
-        // 3. Собираем финальный YAML из полученных данных
-        val parts = receivedMeta.split(":")
-        val blacklist = parts.getOrElse(0) { "" }.replace("|", ",")
-        val whitelist = parts.getOrElse(1) { "" }.replace("|", ",")
+        val metaJsonString = json.optString("metaDataJson", "{}")
+        profileDir.resolve("metadata.json").writeText(metaJsonString) // Клонируем JSON
+
+        // 3. Извлекаем списки для генератора
+        val metaJson = org.json.JSONObject(metaJsonString)
+        val bArray = metaJson.optJSONArray("blacklist")
+        val wArray = metaJson.optJSONArray("whitelist")
+        val bList = mutableListOf<String>()
+        val wList = mutableListOf<String>()
+        if (bArray != null) for (i in 0 until bArray.length()) bList.add(bArray.getString(i))
+        if (wArray != null) for (i in 0 until wArray.length()) wList.add(wArray.getString(i))
 
         val queryMap = (if (sourceUrl.contains("#")) sourceUrl.substringAfter("#") else "").split("&")
             .filter { it.isNotBlank() }
             .associate { val p = it.split("=", limit = 2); p[0] to java.net.URLDecoder.decode(p.getOrNull(1) ?: "", "UTF-8") }
             .toMutableMap()
 
-        // Добавляем списки в параметры конвертера
-        queryMap["Blacklist"] = blacklist
-        queryMap["Whitelist"] = whitelist
+        queryMap["Blacklist"] = bList.joinToString(",")
+        queryMap["Whitelist"] = wList.joinToString(",")
 
         SubConverter.convertToFile(rawConfigGzipBytes, queryMap, profileDir.resolve("config.yaml"))
 
